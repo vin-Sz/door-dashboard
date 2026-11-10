@@ -1,0 +1,91 @@
+name: Deploy dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Only does real work when DATA_KEY (WebUntis / calendar) is configured.
+    # Times are UTC. Every 15 min on school-day daytime, hourly otherwise.
+    - cron: '*/15 4-16 * * 1-5'
+    - cron: '40 0-3,17-23 * * 1-5'
+    - cron: '40 * * * 0,6'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      TZ: Europe/Berlin
+      HAS_KEY: ${{ secrets.DATA_KEY != '' }}
+    steps:
+      - name: Decide
+        id: go
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$HAS_KEY" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "Scheduled run without DATA_KEY - nothing to do."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.go.outputs.run == 'true'
+
+      - name: Assemble site
+        if: steps.go.outputs.run == 'true'
+        run: |
+          mkdir -p _site/data
+          cp -r index.html css js _site/
+          [ -f icon.png ] && cp icon.png _site/ || true
+          printf '{"version":"%s","built":"%s"}\n' "${GITHUB_SHA::7}" "$(date -Iseconds)" > _site/version.json
+          touch _site/.nojekyll
+
+      - uses: actions/setup-node@v4
+        if: steps.go.outputs.run == 'true' && env.HAS_KEY == 'true'
+        with:
+          node-version: 20
+
+      - name: Fetch WebUntis + calendar (encrypted)
+        if: steps.go.outputs.run == 'true' && env.HAS_KEY == 'true'
+        env:
+          DATA_KEY: ${{ secrets.DATA_KEY }}
+          UNTIS_QR: ${{ secrets.UNTIS_QR }}
+          UNTIS_SECRET: ${{ secrets.UNTIS_SECRET }}
+          UNTIS_SERVER: ${{ secrets.UNTIS_SERVER }}
+          UNTIS_SCHOOL: ${{ secrets.UNTIS_SCHOOL }}
+          UNTIS_USER: ${{ secrets.UNTIS_USER }}
+          UNTIS_PASSWORD: ${{ secrets.UNTIS_PASSWORD }}
+          GCAL_ICS_URLS: ${{ secrets.GCAL_ICS_URLS }}
+          PRIVATE_CONFIG: ${{ secrets.PRIVATE_CONFIG }}
+        run: |
+          npm install --no-audit --no-fund --loglevel=error
+          node scripts/fetch-private.mjs _site/data
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.go.outputs.run == 'true'
+        with:
+          path: _site
+          retention-days: 1
+
+      - id: deployment
+        if: steps.go.outputs.run == 'true'
+        uses: actions/deploy-pages@v4
+
+      # Public repos disable scheduled workflows after 60 days without activity.
+      - name: Keep schedule alive
+        if: github.event_name == 'schedule' && steps.go.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable" || true

@@ -1,0 +1,11 @@
+{
+  "name": "door-dashboard",
+  "private": true,
+  "description": "Only used by GitHub Actions to fetch WebUntis + calendar data. The page itself has no build step.",
+  "type": "module",
+  "dependencies": {
+    "ical-expander": "3.2.0",
+    "otplib": "12.0.1",
+    "webuntis": "2.2.1"
+  }
+}

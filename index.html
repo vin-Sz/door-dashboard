@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Door">
+<meta name="format-detection" content="telephone=no">
+<meta name="robots" content="noindex">
+<title>Door Dashboard</title>
+<link rel="apple-touch-icon" href="icon.png">
+<script>
+  // Cache-busting loader: every asset gets ?v=<version> so a version change
+  // always loads fresh files (GitHub Pages caches files for ~10 minutes).
+  (function () {
+    var m = /[?&]v=([^&#]+)/.exec(location.search);
+    var v = m ? m[1] : String(Date.now());
+    window.BOOT_VERSION = m ? m[1] : null;
+    document.write('<link rel="stylesheet" href="css/style.css?v=' + v + '">');
+    var files = ['js/app.js'];
+    for (var i = 0; i < files.length; i++) {
+      document.write('<script src="' + files[i] + '?v=' + v + '"><\/script>');
+    }
+  })();
+</script>
+</head>
+<body>
+<div id="shift">
+  <div id="day">
+    <section id="top">
+      <div id="clockBox" class="card">
+        <div id="clock">--:--</div>
+        <div id="date">&nbsp;</div>
+        <div id="banners"></div>
+      </div>
+      <div id="weather" class="card">
+        <div class="loading">Loading weather…</div>
+      </div>
+    </section>
+    <section id="bottom">
+      <div id="transit" class="card col">
+        <h2>Departures</h2>
+        <div class="body"><div class="loading">Loading departures…</div></div>
+      </div>
+      <div id="school" class="card col">
+        <h2>School</h2>
+        <div class="body"></div>
+      </div>
+      <div id="upcoming" class="card col">
+        <h2>Coming up</h2>
+        <div class="body"></div>
+      </div>
+    </section>
+  </div>
+  <div id="night">
+    <div id="nClock">--:--</div>
+    <div id="nDate"></div>
+    <div id="nInfo"></div>
+  </div>
+</div>
+<div id="err"></div>
+</body>
+</html>
