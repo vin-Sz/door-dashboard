@@ -32,7 +32,11 @@ The iPad picks up the change within about 10 minutes.
 | `DATA_KEY` | Encryption key, also in the device URL as `#k=...` |
 | `PRIVATE_CONFIG` | Contents of `private/config.json` |
 | `UNTIS_SERVER`, `UNTIS_SCHOOL`, `UNTIS_USER`, `UNTIS_SECRET` | WebUntis login (key from "Untis Mobile" access) |
-| `GCAL_ICS_URLS` | Secret iCal address(es), separated by spaces |
+| `GCAL_ICS_URLS` | Secret iCal address(es), separated by spaces. Prefix one with `homework:` to read it as a homework/exam calendar |
+
+Calendar extras: add `#countdown` to an event title to show it as a countdown.
+Settings `calendarHide` (hide routine events by title), `birthdays` (`[{ "name", "date": "MM-DD", "year" }]`),
+`countdowns` and `schoolRoutes` live in `private/config.json`.
 
 ## Updates
 Push to `main`. The Action deploys and writes `version.json`; the device reloads

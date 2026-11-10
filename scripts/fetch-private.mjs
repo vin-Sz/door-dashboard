@@ -56,9 +56,26 @@ async function untis() {
   const today = new Date();
   const from = addDays(today, -1), to = addDays(today, 9);
   await client.login();
-  let raw;
+  let raw, homework = null, exams = null;
+  const untisDay = (n) => { const s = String(n); return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`; };
   try {
     raw = await client.getOwnTimetableForRange(from, to);
+    // Homework + exams are optional: not every school lets students see them.
+    try {
+      const hw = await client.getHomeWorksFor(addDays(today, -1), addDays(today, 21));
+      const subj = {};
+      (hw.lessons || []).forEach((l) => { subj[l.id] = l.subject; });
+      homework = (hw.homeworks || []).filter((h) => !h.completed).map((h) => ({
+        due: untisDay(h.dueDate), subject: subj[h.lessonId] || '', text: String(h.text || '').trim().slice(0, 120)
+      }));
+    } catch (e) { console.log(`WebUntis homework: not available (${String(e.message).slice(0, 80)})`); }
+    try {
+      const ex = await client.getExamsForRange(today, addDays(today, 45));
+      exams = (ex || []).map((x) => ({
+        date: untisDay(x.examDate), start: hhmm(x.startTime), subject: x.subject || '',
+        name: String(x.name || x.examType || 'Exam').slice(0, 60)
+      }));
+    } catch (e) { console.log(`WebUntis exams: not available (${String(e.message).slice(0, 80)})`); }
   } finally {
     try { await client.logout(); } catch { /* ignore */ }
   }
@@ -78,34 +95,51 @@ async function untis() {
     };
   });
   const merged = mergeLessons(lessons);
-  save('untis', { updated: Date.now(), from: dayKey(from), to: dayKey(to), lessons: merged });
-  console.log(`WebUntis: ok (${merged.length} entries)`);
+  save('untis', { updated: Date.now(), from: dayKey(from), to: dayKey(to), lessons: merged, homework, exams });
+  console.log(`WebUntis: ok (${merged.length} entries, homework ${homework ? homework.length : 'n/a'}, exams ${exams ? exams.length : 'n/a'})`);
 }
 
 // ------------------------------------------------------------ Google Calendar (iCal)
 async function calendar() {
-  const urls = (env.GCAL_ICS_URLS || '').split(/\s+/).filter(Boolean);
-  if (!urls.length) { console.log('Calendar: not configured'); return; }
+  // Entries separated by spaces/newlines. Prefix "homework:" marks a homework/exam calendar.
+  const entries = (env.GCAL_ICS_URLS || '').split(/\s+/).filter(Boolean).map((s) => {
+    const m = /^(homework):(https?:.*)$/i.exec(s);
+    return m ? { kind: 'homework', url: m[2] } : { kind: 'event', url: s };
+  });
+  if (!entries.length) { console.log('Calendar: not configured'); return; }
   const IcalExpander = (await import('ical-expander')).default;
-  const start = addDays(new Date(), -1), end = addDays(new Date(), 15);
-  const events = [];
+  const now = new Date();
+  const start = addDays(now, -1), end = addDays(now, 15), far = addDays(now, 366);
+  const events = [], countdowns = [], homework = [], exams = [];
+  const EXAM = /\b(klausur|klassenarbeit|test|exam|prüfung|pruefung|lk)\b/i;
   let okCount = 0;
-  for (const [i, url] of urls.entries()) {
+  for (const [i, { kind, url }] of entries.entries()) {
     try {
       const r = await fetch(url);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const ics = await r.text();
       const ex = new IcalExpander({ ics, maxIterations: 2000 });
-      const res = ex.between(start, end);
+      const res = ex.between(start, far);
       const push = (ev, s, e) => {
         const allDay = s.isDate;
         const sj = s.toJSDate(), ej = (e || s).toJSDate();
+        const title = String(ev.summary || '(no title)');
+        const startDay = allDay ? s.toString().slice(0, 10) : dayKey(sj);
+        if (/#countdown/i.test(title)) {
+          countdowns.push({ title: title.replace(/#countdown/ig, '').trim(), day: startDay });
+          return;
+        }
+        if (sj > end) return;
+        if (kind === 'homework') {
+          (EXAM.test(title) ? exams : homework).push({ due: startDay, date: startDay, subject: '', text: title.slice(0, 120), name: title.slice(0, 60) });
+          return;
+        }
         events.push({
-          title: ev.summary || '(no title)',
+          title,
           location: (ev.location || '').split('\n')[0].slice(0, 60),
           allDay,
           start: sj.toISOString(), end: ej.toISOString(),
-          startDay: allDay ? s.toString().slice(0, 10) : dayKey(sj),
+          startDay,
           endDay: allDay ? (e || s).toString().slice(0, 10) : dayKey(ej)
         });
       };
@@ -117,9 +151,14 @@ async function calendar() {
     }
   }
   if (!okCount) throw new Error('no calendar could be loaded');
+  const byDay = (k) => (a, b) => (a[k] < b[k] ? -1 : 1);
   events.sort((a, b) => (a.start < b.start ? -1 : 1));
-  save('calendar', { updated: Date.now(), events: events.slice(0, 80) });
-  console.log(`Calendar: ok (${events.length} events)`);
+  countdowns.sort(byDay('day')); homework.sort(byDay('due')); exams.sort(byDay('date'));
+  save('calendar', {
+    updated: Date.now(), events: events.slice(0, 80), countdowns: countdowns.slice(0, 20),
+    homework: homework.slice(0, 30), exams: exams.slice(0, 20)
+  });
+  console.log(`Calendar: ok (${events.length} events, ${countdowns.length} countdowns, ${homework.length} homework, ${exams.length} exams)`);
 }
 
 // ------------------------------------------------------------ dashboard settings + timetable

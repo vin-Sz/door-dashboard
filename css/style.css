@@ -269,6 +269,48 @@ body.night { background: #000; }
 body.night #day { display: none; }
 body.night #night { display: block; }
 
+/* ---------- school route box ---------- */
+.route {
+  background: #142a40;
+  border-radius: 10px;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+}
+.route.soon { background: #173a24; }
+.route.late { background: #3b1a1d; }
+.route.late .rLbl { color: var(--bad); }
+.rLbl { font-size: 12px; letter-spacing: 0.08em; color: var(--accent); font-weight: 600; }
+.route.soon .rLbl { color: var(--ok); }
+.rMain { font-size: 19px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rSub { font-size: 14px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rSub b { color: var(--text); }
+
+/* ---------- homework / exams ---------- */
+.due { margin-top: 8px; padding-top: 6px; border-top: 1px solid #30363d; }
+.dueH { font-size: 12px; letter-spacing: 0.08em; font-weight: 600; color: var(--warn); margin-top: 2px; }
+.dueH.ex { color: var(--bad); }
+.dueL { font-size: 15px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dueD { display: inline-block; width: 74px; color: var(--muted); font-size: 13px; }
+.wkx { font-size: 15px; color: var(--muted); text-align: center; line-height: 1.6; margin-top: 16px; }
+
+/* ---------- quote, page dots, health ---------- */
+.quote { font-size: 20px; font-style: italic; color: var(--muted); line-height: 1.4; padding-right: 10px; }
+.quote span { display: block; font-size: 14px; font-style: normal; color: var(--dim); margin-top: 4px; }
+.dots { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; line-height: 0; }
+.dots i { display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: var(--line); margin: 0 4px; }
+.dots i.on { background: var(--muted); }
+#health {
+  position: absolute;
+  right: 6px; bottom: 4px;
+  width: 7px; height: 7px;
+  border-radius: 4px;
+  background: var(--dim);
+}
+#health.ok { background: #2f6f3a; }
+#health.warn { background: var(--warn); }
+#health.bad { background: var(--bad); }
+body.night #health { display: none; }
+
 #err {
   position: absolute;
   left: 4px; bottom: 2px;

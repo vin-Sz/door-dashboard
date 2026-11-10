@@ -77,7 +77,7 @@
   // ------------------------------------------------------------ state
   // Each source: { data, ts (ms of last success), err }
   var S = {};
-  ['weather', 'transit', 'holidays', 'untis', 'calendar'].forEach(function (k) {
+  ['weather', 'transit', 'route', 'holidays', 'untis', 'calendar'].forEach(function (k) {
     var cached = store.get(k);
     S[k] = { data: cached ? cached.data : null, ts: cached ? cached.ts : 0, err: null };
   });
@@ -169,7 +169,7 @@
     if (j.daily && j.daily.uv_index_max && j.daily.uv_index_max[0] >= 6 && now.getHours() < 16) {
       hints.push('🧴 High UV – sunscreen');
     }
-    return hints.slice(0, 3);
+    return hints.slice(0, 2);
   }
 
   function renderWeather(now) {
@@ -204,8 +204,8 @@
   }
 
   // ------------------------------------------------------------ transit
-  function matchesDirection(texts) {
-    var m = C.transit.directionMatch || [];
+  function matchesDirection(texts, dirs) {
+    var m = dirs || C.transit.directionMatch || [];
     if (!m.length) return true;
     for (var i = 0; i < texts.length; i++) {
       var t = String(texts[i] || '').toLowerCase();
@@ -214,12 +214,12 @@
     return false;
   }
 
-  function fromTransitous(j) {
+  function fromTransitous(j, dirs) {
     var out = [];
     (j.stopTimes || []).forEach(function (st) {
       var p = st.place || {};
       if (p.pickupType === 'NOT_ALLOWED') return;
-      if (!matchesDirection([st.headsign, st.tripTo && st.tripTo.name])) return;
+      if (!matchesDirection([st.headsign, st.tripTo && st.tripTo.name], dirs)) return;
       var plan = Date.parse(p.scheduledDeparture), when = Date.parse(p.departure || p.scheduledDeparture);
       if (isNaN(plan)) return;
       var line = st.routeShortName || st.displayName || '';
@@ -232,7 +232,8 @@
         platform: p.track || p.scheduledTrack || '',
         cancelled: !!(st.cancelled || st.tripCancelled || p.cancelled),
         bus: st.mode === 'BUS',
-        replacement: st.mode === 'BUS' && railLine
+        replacement: st.mode === 'BUS' && railLine,
+        mode: st.mode || ''
       });
     });
     return out;
@@ -272,15 +273,107 @@
     }, function (e) { fail('transit', e); });
   }
 
+  // ------------------------------------------------------------ school route ("To school" box)
+  // config.schoolRoutes: [{ name, stopId, stop, lines:['S30'], mode:'bus'|'rail'|'',
+  //   directionMatch:[...], walkMinutes, to, window:['05:30','07:45'] }]
+  function routes() { return (C && C.schoolRoutes) || []; }
+
+  function routeActive(now) {
+    // Only on school days, from the window start until the first lesson.
+    if (!routes().length) return false;
+    var sd = schoolDay(now), start = dayStart(sd);
+    if (sd.kind !== 'school' || !start) return false;
+    var m = nowMin(now), from = 24 * 60;
+    routes().forEach(function (r) { if (r.window) from = Math.min(from, toMin(r.window[0]) - 60); });
+    return m >= from && m < toMin(start);
+  }
+
+  function loadRoutes() {
+    if (!routeActive(new Date())) return Promise.resolve();
+    var list = routes();
+    return Promise.all(list.map(function (r, idx) {
+      var u = 'https://api.transitous.org/api/v5/stoptimes?stopId=' + encodeURIComponent(r.stopId) + '&n=30' +
+        '&time=' + encodeURIComponent(new Date(Date.now() - 5 * MIN).toISOString());
+      return fetchJSON(u).then(function (j) {
+        return fromTransitous(j, r.directionMatch).filter(function (d) {
+          if (r.lines && r.lines.length) {
+            var okLine = false;
+            for (var k = 0; k < r.lines.length; k++) if (d.line.indexOf(r.lines[k]) === 0) okLine = true;
+            if (!okLine) return false;
+          }
+          if (r.mode === 'bus' && !d.bus) return false;
+          if (r.mode === 'rail' && d.bus) return false;
+          if (r.window) {
+            var dm = nowMin(new Date(d.plan));
+            if (dm < toMin(r.window[0]) || dm > toMin(r.window[1])) return false;
+          }
+          d.route = idx;
+          return true;
+        });
+      });
+    })).then(function (lists) {
+      var all = [];
+      lists.forEach(function (l) { all = all.concat(l); });
+      all.sort(function (a, b) { return a.when - b.when; });
+      ok('route', all);
+    }, function (e) { fail('route', e); });
+  }
+
+  // Next connection you can still catch (walking time included).
+  function nextRoute(now) {
+    var deps = S.route.data || [], t = now.getTime();
+    var fresh = (Date.now() - S.route.ts) < 30 * MIN;
+    if (!fresh) return null;
+    for (var i = 0; i < deps.length; i++) {
+      var d = deps[i], r = routes()[d.route];
+      if (!r || d.cancelled) continue;
+      if (d.when - (r.walkMinutes || 0) * MIN >= t - 30000) return { d: d, r: r };
+    }
+    return null;
+  }
+
+  function routeBanners(now) {
+    var out = [];
+    if (!routeActive(now)) return out;
+    var deps = S.route.data || [], t = now.getTime();
+    for (var i = 0; i < deps.length; i++) {
+      var d = deps[i], r = routes()[d.route];
+      if (!r || d.when < t || d.when - t > 90 * MIN) continue;
+      if (d.cancelled) out.push({ cls: 'bad', text: '✕ ' + d.line + ' ' + hm(new Date(d.plan)) + ' from ' + r.stop + ' is cancelled' });
+      else if (d.delay !== null && d.delay >= 5) {
+        out.push({ cls: 'bad', text: '⏱ ' + d.line + ' ' + hm(new Date(d.plan)) + ' is ' + d.delay + ' min late – leave at ' +
+          hm(new Date(d.when - (r.walkMinutes || 0) * MIN)) });
+      }
+    }
+    return out.slice(0, 2);
+  }
+
+  function routeBox(now) {
+    if (!routeActive(now)) return '';
+    var n = nextRoute(now);
+    if (!n) {
+      return S.route.ts ? '<div class="route late"><div class="rLbl">TO SCHOOL</div><div class="rMain">No usual connection left</div>' +
+        '<div class="rSub">Check the DB Navigator app</div></div>' : '';
+    }
+    var d = n.d, r = n.r, leaveAt = d.when - (r.walkMinutes || 0) * MIN;
+    var leaveIn = Math.round((leaveAt - now.getTime()) / MIN);
+    var delay = d.delay === null ? '' : d.delay > 0 ? ' <span class="late-red">+' + d.delay + '</span>' : ' <span class="ontime">on time</span>';
+    var leave = leaveIn <= 0 ? '<b class="ontime">Leave now</b>' : leaveIn <= 20 ? 'Leave in <b>' + leaveIn + ' min</b>' : 'Leave at <b>' + hm(new Date(leaveAt)) + '</b>';
+    return '<div class="route' + (leaveIn <= 5 ? ' soon' : '') + '"><div class="rLbl">TO SCHOOL</div>' +
+      '<div class="rMain"><span class="dLine">' + esc(d.line) + '</span>' + hm(new Date(d.plan)) + ' ' + esc(r.stop) + delay + '</div>' +
+      '<div class="rSub">' + leave + (r.to ? ' · → ' + esc(r.to) : '') + '</div></div>';
+  }
+
   function renderTransit(now) {
     var el = $('transit'), T = C.transit, r = S.transit.data;
-    var title = '<h2>Departures → ' + esc((T.directionMatch && T.directionMatch[0]) || T.stationName) + '</h2>';
+    var box = routeBox(now);
+    var title = '<h2>Departures → ' + esc((T.directionMatch && T.directionMatch[0]) || T.stationName) + '</h2>' + box;
     if (!r) {
       setHTML(el, title + '<div class="loading">' + (S.transit.err ? 'Departures unavailable – retrying…' : 'Loading departures…') + '</div>');
       return;
     }
-    var t = now.getTime(), rows = [];
-    for (var i = 0; i < r.deps.length && rows.length < T.maxRows; i++) {
+    var t = now.getTime(), rows = [], maxRows = box ? Math.max(3, T.maxRows - 2) : T.maxRows;
+    for (var i = 0; i < r.deps.length && rows.length < maxRows; i++) {
       var d = r.deps[i];
       var mins = Math.round((d.when - t) / MIN);
       if (mins < 0) continue;
@@ -488,10 +581,57 @@
       '<div class="s">' + sub + '</div></div>';
   }
 
-  // Decides which day the school panel shows + banners. Shared with night mode.
+  // ------------------------------------------------------------ homework, exams, birthdays, countdowns
+  function homeworkList() {
+    var a = (S.untis.data && S.untis.data.homework) || [], b = (S.calendar.data && S.calendar.data.homework) || [];
+    return a.concat(b).sort(function (x, y) { return x.due < y.due ? -1 : 1; });
+  }
+  function examList() {
+    var a = (S.untis.data && S.untis.data.exams) || [], b = (S.calendar.data && S.calendar.data.exams) || [];
+    return a.concat(b).sort(function (x, y) { return x.date < y.date ? -1 : 1; });
+  }
+  function hwText(h) { return (h.subject ? h.subject + ' – ' : '') + h.text; }
+  function exText(x) { return (x.subject ? x.subject + ' ' : '') + x.name; }
+  function shortDay(key, todayKey) {
+    var off = daysBetween(todayKey, key), d = keyToDate(key);
+    return off === 0 ? 'Today' : off === 1 ? 'Tomorrow' : off < 7 ? DAYS_S[d.getDay()] : DAYS_S[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3);
+  }
+
+  // Birthdays from config ("MM-DD") and from calendar events named "...birthday" / "Geburtstag".
+  function birthdayList(now) {
+    var out = [], todayKey = dayKey(now), y = now.getFullYear();
+    ((C && C.birthdays) || []).forEach(function (b) {
+      var key = y + '-' + b.date;
+      if (key < todayKey) key = (y + 1) + '-' + b.date;
+      var age = b.year ? (+key.slice(0, 4) - b.year) : null;
+      out.push({ name: b.name, day: key, age: age });
+    });
+    var ev = (S.calendar.data && S.calendar.data.events) || [];
+    ev.forEach(function (e) {
+      if (/birthday|geburtstag/i.test(e.title) && e.startDay >= todayKey) {
+        out.push({ name: e.title.replace(/'s birthday|birthday|geburtstag( von)?/ig, '').replace(/[:\-–]+$/, '').trim() || e.title, day: e.startDay, age: null });
+      }
+    });
+    return out.filter(function (b) { return daysBetween(todayKey, b.day) <= 30; })
+      .sort(function (a, b) { return a.day < b.day ? -1 : 1; });
+  }
+
+  function countdownList(now) {
+    var todayKey = dayKey(now);
+    var a = ((S.calendar.data && S.calendar.data.countdowns) || []).concat((C && C.countdowns) || []);
+    return a.filter(function (c) { return c.day >= todayKey; }).sort(function (x, y) { return x.day < y.day ? -1 : 1; });
+  }
+
+  function hiddenEvent(title) {
+    var h = (C && C.calendarHide) || [];
+    for (var i = 0; i < h.length; i++) if (title.toLowerCase().indexOf(h[i].toLowerCase()) >= 0) return true;
+    return /birthday|geburtstag/i.test(title);
+  }
+
+  // Decides which day the school panel shows + banners (most urgent first). Shared with night mode.
   function schoolView(now) {
-    var today = schoolDay(now), end = dayEnd(today), nm = nowMin(now);
-    var view = { banners: [] };
+    var today = schoolDay(now), end = dayEnd(today), nm = nowMin(now), todayKey = dayKey(now);
+    var view = { banners: routeBanners(now) };
     if (today.kind === 'school' && end && nm < toMin(end)) {
       view.date = now; view.sd = today; view.isToday = true;
     } else {
@@ -502,21 +642,73 @@
         view.calm = true; view.today = today; view.next = next;
       }
     }
+    var when = view.isToday ? 'today' : 'tomorrow';
     if (view.sd) {
-      var rem = reminderFor(view.sd);
-      if (rem) view.banners.push({ cls: '', text: (rem.icon ? rem.icon + ' ' : '') + (view.isToday ? rem.today : rem.tomorrow) });
       view.sd.lessons.forEach(function (l) {
         if (l.status === 'cancelled') {
           view.banners.push({ cls: 'bad', text: '✕ ' + (view.isToday ? '' : 'Tomorrow: ') + l.subject + ' ' + l.start + ' cancelled' });
         }
       });
+      var key = dayKey(view.date);
+      examList().forEach(function (x) { if (x.date === key) view.banners.push({ cls: 'bad', text: '📄 Exam ' + when + ': ' + exText(x) }); });
+      homeworkList().forEach(function (h) { if (h.due === key) view.banners.push({ cls: 'warn', text: '📝 Due ' + when + ': ' + hwText(h) }); });
+    }
+    birthdayList(now).forEach(function (b) {
+      if (b.day === todayKey) view.banners.push({ cls: 'info', text: '🎂 ' + b.name + (b.age ? ' turns ' + b.age : '') + ' today' });
+    });
+    if (view.sd) {
+      var rem = reminderFor(view.sd);
+      if (rem) view.banners.push({ cls: '', text: (rem.icon ? rem.icon + ' ' : '') + (view.isToday ? rem.today : rem.tomorrow) });
     }
     return view;
   }
 
+  // "Due" + "Exams" block under the lessons: at most 3 lines.
+  function dueBlock(fromKey, todayKey) {
+    var lines = [], until = dayKey(addDays(keyToDate(fromKey), 7));
+    homeworkList().forEach(function (h) {
+      if (h.due >= fromKey && h.due <= until && lines.length < 2) {
+        lines.push('<div class="dueL"><span class="dueD">' + shortDay(h.due, todayKey) + '</span>' + esc(hwText(h)) + '</div>');
+      }
+    });
+    var ex = [];
+    examList().forEach(function (x) {
+      if (x.date >= todayKey && x.date <= dayKey(addDays(keyToDate(todayKey), 14)) && lines.length + ex.length < 3) {
+        ex.push('<div class="dueL"><span class="dueD">' + shortDay(x.date, todayKey) + '</span>' + esc(exText(x)) + '</div>');
+      }
+    });
+    if (!lines.length && !ex.length) return '';
+    return '<div class="due">' + (lines.length ? '<div class="dueH">DUE</div>' + lines.join('') : '') +
+      (ex.length ? '<div class="dueH ex">EXAMS</div>' + ex.join('') : '') + '</div>';
+  }
+
+  function weekendExtras(now, next) {
+    var out = [], todayKey = dayKey(now);
+    if (next) {
+      var nk = dayKey(next.date);
+      homeworkList().forEach(function (h) {
+        if (h.due === nk && out.length < 2) out.push('📝 Due ' + DAYS[next.date.getDay()] + ': ' + esc(hwText(h)));
+      });
+    }
+    var j = S.weather.data;
+    if (j && j.hourly && j.daily) {
+      var h = j.hourly, t0 = now.getTime() / 1000, endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 22).getTime() / 1000;
+      var rainAt = null;
+      for (var i = 0; i < h.time.length; i++) {
+        if (h.time[i] < t0 - 1800 || h.time[i] > endOfDay) continue;
+        if ((h.precipitation_probability[i] || 0) >= 50) { rainAt = h.time[i]; break; }
+      }
+      var wx = rainAt === null ? 'Dry all day' : rainAt <= t0 ? 'Rain now' : 'Dry until ' + hm(new Date(rainAt * 1000));
+      wx += ' · max ' + Math.round(j.daily.temperature_2m_max[0]) + '°';
+      if (j.daily.sunset) wx += ' · sunset ' + hm(new Date(j.daily.sunset[0] * 1000));
+      out.push(wx);
+    }
+    return out.length ? '<div class="wkx">' + out.join('<br>') + '</div>' : '';
+  }
+
   function renderSchool(now, view) {
     var el = $('school');
-    var html = '<h2>School</h2>';
+    var html = '<h2>School</h2>', todayKey = dayKey(now);
     if (view.sd) {
       var sd = view.sd, start = dayStart(sd), end = dayEnd(sd);
       var head;
@@ -530,6 +722,7 @@
       }
       html += '<div class="sHead">' + head + '</div>' + lessonRows(sd, now, view.isToday);
       if (!activeLessons(sd).length) html += '<div class="empty">All lessons cancelled 🎉</div>';
+      html += dueBlock(dayKey(view.date), todayKey);
       html += sd.src === 'WebUntis' ? stamp('untis', 120) : '';
     } else {
       var t = view.today, next = view.next;
@@ -537,55 +730,94 @@
         ? 'Next school day: ' + DAYS[next.date.getDay()] + (next.offset > 6 ? ' ' + next.date.getDate() + ' ' + MONTHS[next.date.getMonth()] : '') +
           '<br>starts ' + dayStart(next.sd) + ' (' + esc(activeLessons(next.sd)[0].subject) + ')'
         : '';
+      var extras = weekendExtras(now, next);
       var dow = now.getDay();
-      if (t.kind === 'holiday') html += calm('🌴', t.name, nextTxt);
-      else if (dow === 0 || dow === 6 || (dow === 5 && t.kind === 'school')) html += calm('🌿', dow === 5 ? 'Weekend is here' : 'Weekend – no school', nextTxt);
-      else if (holidayOn(dayKey(addDays(now, 1)))) html += calm('🌴', 'Tomorrow: ' + holidayOn(dayKey(addDays(now, 1))).name, nextTxt);
-      else html += calm('🌙', 'School is over', nextTxt);
+      if (t.kind === 'holiday') html += calm('🌴', t.name, nextTxt) + extras;
+      else if (dow === 0 || dow === 6 || (dow === 5 && t.kind === 'school')) html += calm('🌿', dow === 5 ? 'Weekend is here' : 'Weekend – no school', nextTxt) + extras;
+      else if (holidayOn(dayKey(addDays(now, 1)))) html += calm('🌴', 'Tomorrow: ' + holidayOn(dayKey(addDays(now, 1))).name, nextTxt) + extras;
+      else html += calm('🌙', 'School is over', nextTxt) + extras;
     }
     setHTML(el, html);
   }
 
-  // ------------------------------------------------------------ upcoming (calendar + holidays)
+  // ------------------------------------------------------------ upcoming (calendar | countdowns + birthdays + holidays)
+  var upPage = 0, upPageAt = 0;
+
+  function pageEvents(now) {
+    var html = '', rows = 0, maxRows = 7;
+    var cal = S.calendar.data, todayKey = dayKey(now), t = now.getTime(), lastDay = '';
+    for (var i = 0; i < cal.events.length && rows < maxRows; i++) {
+      var e = cal.events[i];
+      if (hiddenEvent(e.title)) continue;
+      var endMs = Date.parse(e.end), startMs = Date.parse(e.start);
+      if (e.allDay) { if (e.endDay <= todayKey) continue; } else if (endMs < t) continue;
+      var dk = e.allDay ? (e.startDay < todayKey ? todayKey : e.startDay) : dayKey(new Date(startMs));
+      if (dk !== lastDay) { html += '<div class="evDay">' + shortDay(dk, todayKey) + '</div>'; lastDay = dk; }
+      var when = e.allDay ? 'all day' : hm(new Date(startMs)) + (startMs <= t ? ' (now)' : '');
+      html += '<div class="ev"><div class="evT">' + esc(e.title) + '</div><div class="evW">' + when +
+        (e.location ? ' · ' + esc(e.location) : '') + '</div></div>';
+      rows++;
+    }
+    return rows ? html : '<div class="empty">Nothing planned for the next days.</div>';
+  }
+
+  function inDays(todayKey, key) {
+    var n = daysBetween(todayKey, key), d = keyToDate(key);
+    var date = DAYS_S[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3);
+    return n <= 0 ? 'today' : n === 1 ? 'tomorrow · ' + date : 'in ' + n + ' days · ' + date;
+  }
+
+  // Returns '' when there is nothing to show.
+  function pageExtras(now, maxRows) {
+    var todayKey = dayKey(now), html = '', rows = 0;
+    var cds = countdownList(now), bds = birthdayList(now);
+    var hols = (S.holidays.data || []).filter(function (h) { return h.end >= todayKey && h.type === 'school'; });
+    if (cds.length) {
+      html += '<div class="evDay">Countdowns</div>';
+      cds.slice(0, 3).forEach(function (c) { html += '<div class="ev"><div class="evT">⏳ ' + esc(c.title) + '</div><div class="evW">' + inDays(todayKey, c.day) + '</div></div>'; rows++; });
+    }
+    if (bds.length) {
+      html += '<div class="evDay">Birthdays</div>';
+      bds.slice(0, 3).forEach(function (b) {
+        html += '<div class="ev"><div class="evT">🎂 ' + esc(b.name) + (b.age ? ' (' + b.age + ')' : '') + '</div><div class="evW">' + inDays(todayKey, b.day) + '</div></div>'; rows++;
+      });
+    }
+    if (hols.length && rows < maxRows) {
+      html += '<div class="evDay">Holidays</div>';
+      hols.slice(0, Math.min(2, maxRows - rows)).forEach(function (h) {
+        html += '<div class="ev"><div class="evT">🌴 ' + esc(h.name) + '</div><div class="evW">' + (h.start <= todayKey ? 'now' : inDays(todayKey, h.start)) + '</div></div>';
+      });
+    }
+    return html;
+  }
+
   function renderUpcoming(now) {
-    var el = $('upcoming'), html = '<h2>Coming up</h2>', rows = 0, maxRows = 7;
-    var cal = S.calendar.data, todayKey = dayKey(now), t = now.getTime();
-    if (cal && cal.events) {
-      var lastDay = '';
-      for (var i = 0; i < cal.events.length && rows < maxRows; i++) {
-        var e = cal.events[i];
-        var endMs = Date.parse(e.end), startMs = Date.parse(e.start);
-        if (e.allDay) { if (e.endDay <= todayKey) continue; } else if (endMs < t) continue;
-        var dk = e.allDay ? (e.startDay < todayKey ? todayKey : e.startDay) : dayKey(new Date(startMs));
-        if (dk !== lastDay) {
-          var off = daysBetween(todayKey, dk), dd = keyToDate(dk);
-          var label = off === 0 ? 'Today' : off === 1 ? 'Tomorrow' : DAYS_S[dd.getDay()] + ' ' + dd.getDate() + ' ' + MONTHS[dd.getMonth()].slice(0, 3);
-          html += '<div class="evDay">' + label + '</div>';
-          lastDay = dk;
-        }
-        var when = e.allDay ? 'all day' : hm(new Date(startMs)) + (startMs <= t ? ' (now)' : '');
-        html += '<div class="ev"><div class="evT">' + esc(e.title) + '</div><div class="evW">' + when +
-          (e.location ? ' · ' + esc(e.location) : '') + '</div></div>';
-        rows++;
-      }
-      if (!rows) html += '<div class="empty">Nothing in your calendar for the next days.</div>';
+    var el = $('upcoming'), html = '<h2>Coming up</h2>';
+    var cal = S.calendar.data;
+    var extras = pageExtras(now, 6);
+    var pages = [];
+    if (cal && cal.events) pages.push(pageEvents(now));
+    if (extras) pages.push(extras);
+    if (!pages.length) pages.push('<div class="empty">Nothing coming up.</div>');
+    if (upPage >= pages.length) upPage = 0;
+    html += pages[upPage];
+    if (pages.length > 1) {
+      html += '<div class="dots">' + pages.map(function (p, i) { return '<i' + (i === upPage ? ' class="on"' : '') + '></i>'; }).join('') + '</div>';
+    } else {
+      html += cal ? stamp('calendar', 120) : stamp('holidays', 60 * 48);
     }
-    // Next holidays
-    var hols = (S.holidays.data || []).filter(function (h) { return h.end >= todayKey; });
-    var hRows = cal ? 1 : 4, shown = 0;
-    if (hols.length) {
-      if (cal) html += '<div class="evDay">Holidays</div>';
-      for (var k = 0; k < hols.length && shown < hRows; k++) {
-        var h = hols[k], inDays = daysBetween(todayKey, h.start);
-        var sd = keyToDate(h.start);
-        var w = inDays <= 0 ? 'now' : inDays === 1 ? 'tomorrow' : 'in ' + inDays + ' days · ' + DAYS_S[sd.getDay()] + ' ' + sd.getDate() + ' ' + MONTHS[sd.getMonth()].slice(0, 3);
-        html += '<div class="ev"><div class="evT">' + (h.type === 'school' ? '🌴 ' : '🎉 ') + esc(h.name) + '</div><div class="evW">' + w + '</div></div>';
-        shown++;
-      }
-    }
-    if (!cal && !hols.length) html += '<div class="empty">Nothing coming up.</div>';
-    html += cal ? stamp('calendar', 120) : stamp('holidays', 60 * 48);
+    el.__pages = pages.length;
     setHTML(el, html);
+  }
+
+  // Switch "Coming up" pages every 15 s.
+  function rotatePages(now) {
+    var el = $('upcoming');
+    if (!el || !el.__pages || el.__pages < 2 || document.body.className === 'night') return;
+    if (now.getTime() - upPageAt < 15000) return;
+    upPageAt = now.getTime();
+    upPage = (upPage + 1) % el.__pages;
+    try { renderUpcoming(now); } catch (e) { showErr(e); }
   }
 
   // ------------------------------------------------------------ clock, banners, night
@@ -597,13 +829,70 @@
   }
   var wakeUntil = 0;
 
+  // Short public-domain quotes, one per day.
+  var QUOTES = [
+    ['The secret of getting ahead is getting started.', 'Mark Twain'],
+    ['Well done is better than well said.', 'Benjamin Franklin'],
+    ['It always seems impossible until it is done.', 'Nelson Mandela'],
+    ['Whether you think you can, or you think you can’t – you’re right.', 'Henry Ford'],
+    ['Energy and persistence conquer all things.', 'Benjamin Franklin'],
+    ['Do what you can, with what you have, where you are.', 'Theodore Roosevelt'],
+    ['Simplicity is the ultimate sophistication.', 'Leonardo da Vinci'],
+    ['Knowledge is power.', 'Francis Bacon'],
+    ['Little by little, one travels far.', 'J. R. R. Tolkien'],
+    ['Quality is not an act, it is a habit.', 'Will Durant'],
+    ['Fall seven times, stand up eight.', 'Japanese proverb'],
+    ['A journey of a thousand miles begins with a single step.', 'Lao Tzu'],
+    ['The best way out is always through.', 'Robert Frost'],
+    ['Stay hungry, stay foolish.', 'Whole Earth Catalog'],
+    ['Action is the foundational key to all success.', 'Pablo Picasso'],
+    ['He who has a why to live can bear almost any how.', 'Friedrich Nietzsche'],
+    ['Learning never exhausts the mind.', 'Leonardo da Vinci'],
+    ['The only way to do great work is to love what you do.', 'Steve Jobs'],
+    ['Courage is grace under pressure.', 'Ernest Hemingway'],
+    ['Done is better than perfect.', 'Sheryl Sandberg'],
+    ['Patience is bitter, but its fruit is sweet.', 'Aristotle'],
+    ['We are what we repeatedly do.', 'Will Durant'],
+    ['Make each day your masterpiece.', 'John Wooden'],
+    ['First, solve the problem. Then, write the code.', 'John Johnson'],
+    ['Talk is cheap. Show me the code.', 'Linus Torvalds'],
+    ['Without music, life would be a mistake.', 'Friedrich Nietzsche'],
+    ['Imagination is more important than knowledge.', 'Albert Einstein'],
+    ['Life is like riding a bicycle. To keep your balance you must keep moving.', 'Albert Einstein'],
+    ['Be yourself; everyone else is already taken.', 'Oscar Wilde'],
+    ['In the middle of difficulty lies opportunity.', 'Albert Einstein']
+  ];
+
   function renderClock(now, view) {
     setHTML($('clock'), hm(now));
     setHTML($('date'), DAYS[now.getDay()] + ', ' + now.getDate() + ' ' + MONTHS[now.getMonth()]);
     var b = view.banners.slice(0, 3).map(function (x) {
       return '<div class="banner ' + x.cls + '">' + esc(x.text) + '</div>';
     });
+    if (!b.length) {
+      var day = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(now.getFullYear(), 0, 1)) / 86400000);
+      var q = QUOTES[day % QUOTES.length];
+      b.push('<div class="quote">“' + esc(q[0]) + '”<span>– ' + esc(q[1]) + '</span></div>');
+    }
     setHTML($('banners'), b.join(''));
+  }
+
+  // Small dot bottom right: green = all fresh, orange = one source stale, red = several.
+  function renderHealth(now) {
+    var night = document.body.className === 'night', stale = [];
+    function chk(name, maxMin, need) {
+      if (!need) return;
+      if (!S[name].ts || (Date.now() - S[name].ts) / MIN > maxMin) stale.push(name);
+    }
+    chk('weather', 60, true);
+    chk('transit', 15, !night && !!(C && C.transit));
+    chk('holidays', 60 * 48, true);
+    chk('untis', 120, !!S.untis.ts);
+    chk('calendar', 120, !!S.calendar.ts);
+    var el = $('health');
+    if (!el) return;
+    el.className = stale.length === 0 ? 'ok' : stale.length === 1 ? 'warn' : 'bad';
+    el.title = stale.length ? 'stale: ' + stale.join(', ') : 'all data fresh';
   }
 
   function renderNight(now) {
@@ -642,6 +931,7 @@
       renderTransit(now);
       renderSchool(now, view);
       renderUpcoming(now);
+      renderHealth(now);
     } catch (e) { showErr(e); }
   }
 
@@ -664,6 +954,7 @@
     tasks = [
       { fn: loadWeather, every: C.refresh.weather, night: 60 },
       { fn: loadTransit, every: C.refresh.transit, night: 0 },
+      { fn: loadRoutes, every: C.refresh.transit, night: C.refresh.transit },
       { fn: loadHolidays, every: C.refresh.holidays, night: C.refresh.holidays },
       { fn: loadPrivate, every: C.refresh.privateData, night: 60 },
       { fn: checkVersion, every: C.refresh.version, night: C.refresh.version }
@@ -755,6 +1046,7 @@
       renderAll(false);
       runTasks(now);
       pixelShift(now);
+      if (C) rotatePages(now);
       nightly();
       if (errCount > 50) { errCount = 0; nightlyAt = 0; }
     } catch (e) { showErr(e); }
