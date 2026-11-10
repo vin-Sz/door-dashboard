@@ -301,9 +301,9 @@ body.night #night { display: block; }
 .dots i.on { background: var(--muted); }
 #health {
   position: absolute;
-  right: 6px; bottom: 4px;
-  width: 7px; height: 7px;
-  border-radius: 4px;
+  right: 16px; top: 16px;
+  width: 9px; height: 9px;
+  border-radius: 5px;
   background: var(--dim);
 }
 #health.ok { background: #2f6f3a; }
