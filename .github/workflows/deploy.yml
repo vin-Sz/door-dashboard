@@ -47,7 +47,7 @@ jobs:
         if: steps.go.outputs.run == 'true'
         run: |
           mkdir -p _site/data
-          cp -r index.html css js _site/
+          cp -r index.html css js media _site/
           [ -f icon.png ] && cp icon.png _site/ || true
           printf '{"version":"%s","built":"%s"}\n' "${GITHUB_SHA::7}" "$(date -Iseconds)" > _site/version.json
           touch _site/.nojekyll

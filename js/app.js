@@ -1039,6 +1039,40 @@
   document.addEventListener('touchstart', onTouch, false);
   document.addEventListener('click', onTouch, false);
 
+  // Keep the screen on. iOS 12 has no Wake Lock API, but a playing (muted,
+  // inline, looping) video stops the auto-lock. Newer browsers get the real API.
+  var keepVid = null, wakeLock = null;
+  function keepAwake() {
+    try {
+      if (navigator.wakeLock && !wakeLock) {
+        navigator.wakeLock.request('screen').then(function (l) {
+          wakeLock = l;
+          l.addEventListener('release', function () { wakeLock = null; });
+        }).catch(function () {});
+      }
+      if (!keepVid) {
+        keepVid = document.createElement('video');
+        keepVid.setAttribute('muted', '');
+        keepVid.setAttribute('playsinline', '');
+        keepVid.setAttribute('webkit-playsinline', '');
+        keepVid.setAttribute('loop', '');
+        keepVid.muted = true;
+        keepVid.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1';
+        keepVid.src = 'media/keepawake.mp4' + (window.BOOT_VERSION ? '?v=' + window.BOOT_VERSION : '');
+        document.body.appendChild(keepVid);
+      }
+      if (keepVid.paused) {
+        var p = keepVid.play();
+        if (p && p.catch) p.catch(function () {});
+      }
+    } catch (e) { /* not critical */ }
+  }
+  document.addEventListener('touchend', keepAwake, false);
+  document.addEventListener('click', keepAwake, false);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) keepAwake();
+  }, false);
+
   // Single self-rescheduling timer: no stacking intervals.
   function tick() {
     try {
@@ -1048,6 +1082,7 @@
       pixelShift(now);
       if (C) rotatePages(now);
       nightly();
+      if (now.getSeconds() % 30 === 0 && keepVid && keepVid.paused) keepAwake();
       if (errCount > 50) { errCount = 0; nightlyAt = 0; }
     } catch (e) { showErr(e); }
     setTimeout(tick, 1000 - (Date.now() % 1000) + 20);
@@ -1059,6 +1094,7 @@
     var cached = dataKey() ? store.get('cfg') : null;
     if (cached && cached.data) applyConfig(cached.data);
     renderAll(true);
+    keepAwake();
     tick();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, false);
