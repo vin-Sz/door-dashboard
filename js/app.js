@@ -658,7 +658,7 @@
     });
     if (view.sd) {
       var rem = reminderFor(view.sd);
-      if (rem) view.banners.push({ cls: '', text: (rem.icon ? rem.icon + ' ' : '') + (view.isToday ? rem.today : rem.tomorrow) });
+      if (rem) view.banners.push({ cls: '', text: view.isToday ? rem.today : rem.tomorrow });
     }
     return view;
   }
@@ -925,7 +925,7 @@
       var lbl = next.offset === 1 ? (now.getHours() < 12 ? 'Today' : 'Tomorrow') : DAYS[next.date.getDay()];
       info.push(lbl + ': school ' + dayStart(next.sd) + '–' + dayEnd(next.sd));
       var rem = reminderFor(next.sd);
-      if (rem && next.offset === 1) info.push((rem.icon ? rem.icon + ' ' : '') + (lbl === 'Today' ? rem.today : rem.tomorrow));
+      if (rem && next.offset === 1) info.push(lbl === 'Today' ? rem.today : rem.tomorrow);
     }
     setHTML($('nInfo'), info.map(esc).join('<br>'));
   }
