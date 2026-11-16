@@ -33,8 +33,14 @@ jobs:
     steps:
       - name: Decide
         id: go
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$HAS_KEY" != "true" ]; then
+          # A run that sat in the queue must not overwrite a newer deploy with old code.
+          head=$(gh api "repos/${{ github.repository }}/commits/main" --jq .sha || echo "${{ github.sha }}")
+          if [ "$head" != "${{ github.sha }}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "Outdated commit (main is now ${head::7}) - skipping."
+          elif [ "${{ github.event_name }}" = "schedule" ] && [ "$HAS_KEY" != "true" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"; echo "Scheduled run without DATA_KEY - nothing to do."
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
