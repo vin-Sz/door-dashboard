@@ -869,10 +869,10 @@
     var b = view.banners.slice(0, 3).map(function (x) {
       return '<div class="banner ' + x.cls + '">' + esc(x.text) + '</div>';
     });
-    if (!b.length) {
+    if (b.length < 2) { // two banners already fill the card; next to one banner the quote is set smaller
       var day = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(now.getFullYear(), 0, 1)) / 86400000);
       var q = QUOTES[day % QUOTES.length];
-      b.push('<div class="quote">“' + esc(q[0]) + '”<span>– ' + esc(q[1]) + '</span></div>');
+      b.push('<div class="quote' + (b.length ? ' small' : '') + '">“' + esc(q[0]) + '”<span>– ' + esc(q[1]) + '</span></div>');
     }
     setHTML($('banners'), b.join(''));
   }
