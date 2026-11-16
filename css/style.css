@@ -296,7 +296,7 @@ body.night #night { display: block; }
 /* ---------- quote, page dots, health ---------- */
 .quote { font-size: 20px; font-style: italic; color: var(--muted); line-height: 1.4; padding-right: 10px; }
 .quote span { display: block; font-size: 14px; font-style: normal; color: var(--dim); margin-top: 4px; }
-.quote.small { font-size: 16px; line-height: 1.25; }
+.quote.small { font-size: 15px; line-height: 1.2; }
 .quote.small span { display: inline; margin-left: 6px; }
 .dots { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; line-height: 0; }
 .dots i { display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: var(--line); margin: 0 4px; }
