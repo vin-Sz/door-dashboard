@@ -38,7 +38,7 @@ html { background: #2b3a67 linear-gradient(170deg, #2b3a67 0%, #5a5f8f 38%, #c07
 html.sky-day   { background: #1f6fb8 linear-gradient(170deg, #1f6fb8 0%, #3d8fd1 45%, #7cb8e6 80%, #a9d3ef 100%); }
 html.sky-grey  { background: #2e3a46 linear-gradient(170deg, #2e3a46 0%, #46525e 45%, #5f6b76 80%, #75808a 100%); }
 html.sky-dusk  { background: #1a1d3d linear-gradient(170deg, #1a1d3d 0%, #3b2d5c 40%, #8a4a6b 75%, #d9785f 100%); }
-html.sky-night { background: #070b1a linear-gradient(170deg, #070b1a 0%, #0f1630 50%, #1b2245 100%); }
+html.sky-night { background: #16204a linear-gradient(170deg, #121a40 0%, #22306a 45%, #3b3f86 80%, #5a4a8e 100%); }
 
 #shift {
   position: absolute;
