@@ -2,16 +2,17 @@
    Rules: no flex gap, no aspect-ratio, no :is()/:where(), no backdrop-filter. */
 :root {
   --bg: #0d1117;
-  --card: #161b22;
-  --line: #262d36;
-  --text: #e9edf2;
-  --muted: #8b95a1;
-  --dim: #5c6670;
-  --accent: #6cb6ff;
-  --ok: #56d364;
-  --warn: #f0b429;
-  --bad: #ff6b6b;
-  --sport: #c297ff;
+  --card: rgba(8, 12, 30, 0.34);
+  --line: rgba(255, 255, 255, 0.14);
+  --text: #fff;
+  --muted: rgba(255, 255, 255, 0.72);
+  --dim: rgba(255, 255, 255, 0.5);
+  --accent: #a8d6ff;
+  --ok: #8ef29a;
+  --warn: #ffd27a;
+  --bad: #ffa3a3;
+  --sport: #e2c8ff;
+  --glass: rgba(255, 255, 255, 0.16);
 }
 
 * { box-sizing: border-box; }
@@ -31,6 +32,14 @@ html, body {
   cursor: default;
 }
 
+/* Sky behind the cards; js sets html.sky-* from sunrise/sunset and the weather. */
+body { background: transparent; }
+html { background: #2b3a67 linear-gradient(170deg, #2b3a67 0%, #5a5f8f 38%, #c0798a 72%, #f0a77c 100%); }
+html.sky-day   { background: #1f6fb8 linear-gradient(170deg, #1f6fb8 0%, #3d8fd1 45%, #7cb8e6 80%, #a9d3ef 100%); }
+html.sky-grey  { background: #2e3a46 linear-gradient(170deg, #2e3a46 0%, #46525e 45%, #5f6b76 80%, #75808a 100%); }
+html.sky-dusk  { background: #1a1d3d linear-gradient(170deg, #1a1d3d 0%, #3b2d5c 40%, #8a4a6b 75%, #d9785f 100%); }
+html.sky-night { background: #070b1a linear-gradient(170deg, #070b1a 0%, #0f1630 50%, #1b2245 100%); }
+
 #shift {
   position: absolute;
   left: 0; top: 0; right: 0; bottom: 0;
@@ -46,8 +55,9 @@ html, body {
 
 .card {
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   padding: 14px 16px;
   overflow: hidden;
   position: relative;
@@ -128,15 +138,16 @@ h2 {
   padding: 7px 12px;
   border-radius: 10px;
   margin-bottom: 6px;
-  background: #2a2140;
+  background: var(--glass);
+  border-left: 3px solid var(--sport);
   color: var(--sport);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.banner.warn { background: #3a2e12; color: var(--warn); }
-.banner.bad { background: #3b1a1d; color: var(--bad); }
-.banner.info { background: #142a40; color: var(--accent); }
+.banner.warn { border-left-color: var(--warn); color: var(--warn); }
+.banner.bad { border-left-color: var(--bad); color: var(--bad); }
+.banner.info { border-left-color: var(--accent); color: var(--accent); }
 
 /* ---------- weather ---------- */
 .wNow {
@@ -197,14 +208,15 @@ h2 {
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 5px;
-  background: #30363d;
+  background: rgba(255, 255, 255, 0.92);
+  color: #22284a;
   margin-right: 6px;
 }
 .dDest { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dSub { font-size: 13px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .busTxt { color: var(--warn); }
 .dIn { width: 52px; text-align: right; font-size: 20px; font-weight: 600; color: var(--muted); }
-.dIn.go { color: var(--ok); }
+.dIn.go { color: #08240e; background: #5be06b; border-radius: 10px; padding: 3px 0; text-align: center; }
 .dIn.late { color: var(--dim); font-weight: 400; font-size: 16px; }
 .late-red { color: var(--bad); }
 .ontime { color: var(--ok); }
@@ -216,8 +228,8 @@ h2 {
   border-radius: 4px;
   margin-left: 4px;
 }
-.tag.bus { background: #3a2e12; color: var(--warn); }
-.tag.x { background: #3b1a1d; color: var(--bad); }
+.tag.bus { background: rgba(255, 210, 122, 0.2); color: var(--warn); }
+.tag.x { background: rgba(255, 120, 120, 0.25); color: var(--bad); }
 
 /* ---------- school ---------- */
 .sHead { font-size: 18px; margin-bottom: 8px; }
@@ -235,7 +247,7 @@ h2 {
 .lTime { width: 104px; font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .lSub { font-size: 20px; font-weight: 600; width: 64px; }
 .lMeta { -webkit-flex: 1 1 0; flex: 1 1 0; font-size: 14px; color: var(--muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.les.now { background: #142a40; border-radius: 8px; padding-left: 6px; padding-right: 6px; }
+.les.now { background: rgba(255, 255, 255, 0.24); border-radius: 8px; padding-left: 6px; padding-right: 6px; }
 .les.done { opacity: 0.4; }
 .les.cancelled .lSub, .les.cancelled .lTime { text-decoration: line-through; color: var(--dim); }
 .les.cancelled .lMeta { color: var(--bad); }
@@ -257,27 +269,38 @@ h2 {
   display: none;
   position: absolute;
   left: 0; top: 0; right: 0; bottom: 0;
-  background: #000;
+  background: #04060f radial-gradient(ellipse at 50% 120%, #161d44 0%, #0a0f28 45%, #03040c 100%);
   text-align: center;
   padding-top: 230px;
-  color: #4a4f55;
+  color: #5d6890;
+  overflow: hidden;
 }
-#nClock { font-size: 140px; font-weight: 100; line-height: 1; font-variant-numeric: tabular-nums; }
+/* Stars: one 2px dot whose box-shadow list (built in js) draws them all. */
+#stars { position: absolute; left: 0; top: 0; width: 2px; height: 2px; border-radius: 1px; }
+#milky {
+  position: absolute; left: -200px; top: 120px; width: 1424px; height: 260px;
+  background: radial-gradient(ellipse at center, rgba(140, 160, 230, 0.10) 0%, rgba(140, 160, 230, 0.04) 40%, rgba(140, 160, 230, 0) 70%);
+  -webkit-transform: rotate(-18deg); transform: rotate(-18deg);
+}
+#moon { position: absolute; right: 130px; top: 90px; width: 64px; height: 64px; border-radius: 32px; box-shadow: -14px 8px 0 0 #9aa2c4; opacity: 0.45; }
+#nClock, #nDate, #nInfo { position: relative; }
+#nClock { font-size: 140px; font-weight: 100; line-height: 1; font-variant-numeric: tabular-nums; color: #7d88b5; }
 #nDate { font-size: 24px; margin-top: 10px; }
-#nInfo { font-size: 20px; margin-top: 26px; line-height: 1.6; }
+#nInfo { display: inline-block; font-size: 20px; margin-top: 26px; line-height: 1.6; padding: 10px 22px; border-radius: 16px; background: rgba(120, 140, 220, 0.06); border: 1px solid rgba(150, 170, 240, 0.10); }
+#nInfo:empty { display: none; }
 body.night { background: #000; }
 body.night #day { display: none; }
 body.night #night { display: block; }
 
 /* ---------- school route box ---------- */
 .route {
-  background: #142a40;
+  background: var(--glass);
   border-radius: 10px;
   padding: 7px 10px;
   margin-bottom: 4px;
 }
-.route.soon { background: #173a24; }
-.route.late { background: #3b1a1d; }
+.route.soon { background: rgba(127, 240, 140, 0.2); }
+.route.late { background: rgba(255, 120, 120, 0.25); }
 .route.late .rLbl { color: var(--bad); }
 .rLbl { font-size: 12px; letter-spacing: 0.08em; color: var(--accent); font-weight: 600; }
 .route.soon .rLbl { color: var(--ok); }
@@ -286,7 +309,7 @@ body.night #night { display: block; }
 .rSub b { color: var(--text); }
 
 /* ---------- homework / exams ---------- */
-.due { margin-top: 8px; padding-top: 6px; border-top: 1px solid #30363d; }
+.due { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 .dueH { font-size: 12px; letter-spacing: 0.08em; font-weight: 600; color: var(--warn); margin-top: 2px; }
 .dueH.ex { color: var(--bad); }
 .dueL { font-size: 15px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -308,7 +331,7 @@ body.night #night { display: block; }
   border-radius: 5px;
   background: var(--dim);
 }
-#health.ok { background: #2f6f3a; }
+#health.ok { background: #5be06b; }
 #health.warn { background: var(--warn); }
 #health.bad { background: var(--bad); }
 body.night #health { display: none; }

@@ -957,7 +957,36 @@
       renderSchool(now, view);
       renderUpcoming(now);
       renderHealth(now);
+      renderSky(now);
     } catch (e) { showErr(e); }
+  }
+
+  // Background sky: dawn/dusk around sunrise/sunset, grey when overcast or wet, otherwise day or night.
+  function renderSky(now) {
+    var j = S.weather.data, t = now.getTime() / 1000;
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+    var rise = j && j.daily ? j.daily.sunrise[0] : today + 7 * 3600;
+    var set = j && j.daily ? j.daily.sunset[0] : today + 17 * 3600;
+    var sky = t < rise - 1800 || t > set + 1800 ? 'night'
+      : t < rise + 3600 ? 'dawn'
+      : t > set - 3600 ? 'dusk'
+      : j && j.current && j.current.weather_code >= 3 ? 'grey' : 'day';
+    document.documentElement.className = 'sky-' + sky;
+  }
+
+  // Night screen stars: one dot whose box-shadow list draws a few hundred, brighter near the top.
+  function makeStars() {
+    var el = $('stars');
+    if (!el) return;
+    var s = [];
+    for (var i = 0; i < 420; i++) {
+      var y = Math.pow(Math.random(), 1.4) * 768;
+      var a = (0.15 + Math.random() * 0.5) * (1 - y / 1100);
+      var big = Math.random() < 0.1;
+      s.push(Math.round(Math.random() * 1024) + 'px ' + Math.round(y) + 'px ' + (big ? '2px 1px' : '0 0') +
+        ' rgba(200,210,255,' + (big ? a + 0.15 : a).toFixed(2) + ')');
+    }
+    el.style.boxShadow = s.join(',');
   }
 
   // Without a valid key: only a clock and a lock symbol. Nothing personal.
@@ -1118,6 +1147,7 @@
     // Last decrypted config (kept on this device only) lets the screen work offline after a reload.
     var cached = dataKey() ? store.get('cfg') : null;
     if (cached && cached.data) applyConfig(cached.data);
+    makeStars();
     renderAll(true);
     keepAwake();
     tick();
