@@ -329,6 +329,12 @@
       if (!r || d.cancelled) continue;
       if (d.when - (r.walkMinutes || 0) * MIN >= t - 30000) return { d: d, r: r };
     }
+    // None fits the planned walking time: still show the next one that hasn't left,
+    // marked as tight, instead of "no connection" while the train is still coming.
+    for (var j = 0; j < deps.length; j++) {
+      var d2 = deps[j], r2 = routes()[d2.route];
+      if (r2 && !d2.cancelled && d2.when >= t) return { d: d2, r: r2, tight: true };
+    }
     return null;
   }
 
@@ -358,8 +364,9 @@
     var d = n.d, r = n.r, leaveAt = d.when - (r.walkMinutes || 0) * MIN;
     var leaveIn = Math.round((leaveAt - now.getTime()) / MIN);
     var delay = d.delay === null ? '' : d.delay > 0 ? ' <span class="late-red">+' + d.delay + '</span>' : ' <span class="ontime">on time</span>';
-    var leave = leaveIn <= 0 ? '<b class="ontime">Leave now</b>' : leaveIn <= 20 ? 'Leave in <b>' + leaveIn + ' min</b>' : 'Leave at <b>' + hm(new Date(leaveAt)) + '</b>';
-    return '<div class="route' + (leaveIn <= 5 ? ' soon' : '') + '"><div class="rLbl">TO SCHOOL</div>' +
+    var leave = n.tight ? '<b class="late-red">Tight – leave right now</b> (' + Math.round((d.when - now.getTime()) / MIN) + ' min to departure)'
+      : leaveIn <= 0 ? '<b class="ontime">Leave now</b>' : leaveIn <= 20 ? 'Leave in <b>' + leaveIn + ' min</b>' : 'Leave at <b>' + hm(new Date(leaveAt)) + '</b>';
+    return '<div class="route' + (n.tight ? ' late' : leaveIn <= 5 ? ' soon' : '') + '"><div class="rLbl">TO SCHOOL</div>' +
       '<div class="rMain"><span class="dLine">' + esc(d.line) + '</span>' + hm(new Date(d.plan)) + ' ' + esc(r.stop) + delay + '</div>' +
       '<div class="rSub">' + leave + (r.to ? ' · → ' + esc(r.to) : '') + '</div></div>';
   }
@@ -949,7 +956,8 @@
     var night = isNight(now) && Date.now() > wakeUntil;
     document.body.className = night ? 'night' : '';
     try {
-      if (night) { renderNight(now); return; }
+      if (night) { pixelShift(now); renderNight(now); return; }
+      pixelShift(now);
       var view = schoolView(now);
       renderClock(now, view);
       renderWeather(now);
@@ -1072,15 +1080,24 @@
   }
   window.onerror = function (msg) { showErr(msg); };
 
-  var shiftAt = 0;
+  // Burn-in protection: nudge the whole screen a few pixels every 3 minutes.
+  // Night allows a bigger nudge; the day layout fills the screen, so when the
+  // mode changes (e.g. tap to wake) the nudge is redone at once, without the
+  // slow slide, so the day cards never sit 24px off to one side.
+  var shiftAt = 0, shiftMode = '';
   function pixelShift(now) {
-    if (now.getTime() - shiftAt < 3 * MIN) return;
+    var mode = document.body.className === 'night' ? 'night' : 'day';
+    var changed = mode !== shiftMode;
+    if (!changed && now.getTime() - shiftAt < 3 * MIN) return;
     shiftAt = now.getTime();
-    var r = document.body.className === 'night' ? 24 : 5;
+    var r = mode === 'night' ? 24 : 5;
     var x = Math.round((Math.random() * 2 - 1) * r), y = Math.round((Math.random() * 2 - 1) * r);
     var tr = 'translate(' + x + 'px,' + y + 'px)';
     var s = $('shift').style;
+    var tn = changed && shiftMode ? 'none' : '';
+    s.webkitTransition = tn; s.transition = tn;
     s.webkitTransform = tr; s.transform = tr;
+    shiftMode = mode;
   }
 
   function onTouch() {
