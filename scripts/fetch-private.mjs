@@ -8,6 +8,7 @@
 //   UNTIS_QR          "untis://setschool?..." from WebUntis profile -> Data access (preferred)
 //   or UNTIS_SERVER, UNTIS_SCHOOL, UNTIS_USER, UNTIS_PASSWORD
 //   GCAL_ICS_URLS     one or more secret iCal URLs, separated by spaces/newlines
+//                     (prefix "homework:" or "school:", see calendar())
 //   TZ=Europe/Berlin  (set by the workflow)
 import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -101,16 +102,17 @@ async function untis() {
 
 // ------------------------------------------------------------ Google Calendar (iCal)
 async function calendar() {
-  // Entries separated by spaces/newlines. Prefix "homework:" marks a homework/exam calendar.
+  // Entries separated by spaces/newlines. Prefix "homework:" marks a homework/exam calendar,
+  // "school:" a school dates calendar (exams + other school dates, shown on their own tab).
   const entries = (env.GCAL_ICS_URLS || '').split(/\s+/).filter(Boolean).map((s) => {
-    const m = /^(homework):(https?:.*)$/i.exec(s);
-    return m ? { kind: 'homework', url: m[2] } : { kind: 'event', url: s };
-  });
+    const m = /^(homework|school):(.*)$/i.exec(s);
+    return m ? { kind: m[1].toLowerCase(), url: m[2] } : { kind: 'event', url: s };
+  }).filter((x) => /^https?:\/\//i.test(x.url)); // an unset secret leaves a bare "school:"
   if (!entries.length) { console.log('Calendar: not configured'); return; }
   const IcalExpander = (await import('ical-expander')).default;
   const now = new Date();
-  const start = addDays(now, -1), end = addDays(now, 15), far = addDays(now, 366);
-  const events = [], countdowns = [], homework = [], exams = [];
+  const start = addDays(now, -1), end = addDays(now, 15), schoolEnd = addDays(now, 43), far = addDays(now, 366);
+  const events = [], countdowns = [], homework = [], exams = [], school = [];
   const EXAM = /\b(klausur|klassenarbeit|test|exam|prüfung|pruefung|lk)\b/i;
   let okCount = 0;
   for (const [i, { kind, url }] of entries.entries()) {
@@ -127,6 +129,13 @@ async function calendar() {
         const startDay = allDay ? s.toString().slice(0, 10) : dayKey(sj);
         if (/#countdown/i.test(title)) {
           countdowns.push({ title: title.replace(/#countdown/ig, '').trim(), day: startDay });
+          return;
+        }
+        if (kind === 'school') {
+          if (sj > schoolEnd) return;
+          const time = allDay ? '' : `${pad(sj.getHours())}:${pad(sj.getMinutes())}`;
+          if (EXAM.test(title)) exams.push({ date: startDay, start: time, subject: '', name: title.slice(0, 60) });
+          else school.push({ day: startDay, endDay: allDay ? (e || s).toString().slice(0, 10) : dayKey(ej), time, title: title.slice(0, 80) });
           return;
         }
         if (sj > end) return;
@@ -153,12 +162,12 @@ async function calendar() {
   if (!okCount) throw new Error('no calendar could be loaded');
   const byDay = (k) => (a, b) => (a[k] < b[k] ? -1 : 1);
   events.sort((a, b) => (a.start < b.start ? -1 : 1));
-  countdowns.sort(byDay('day')); homework.sort(byDay('due')); exams.sort(byDay('date'));
+  countdowns.sort(byDay('day')); homework.sort(byDay('due')); exams.sort(byDay('date')); school.sort(byDay('day'));
   save('calendar', {
     updated: Date.now(), events: events.slice(0, 80), countdowns: countdowns.slice(0, 20),
-    homework: homework.slice(0, 30), exams: exams.slice(0, 20)
+    homework: homework.slice(0, 30), exams: exams.slice(0, 20), school: school.slice(0, 20)
   });
-  console.log(`Calendar: ok (${events.length} events, ${countdowns.length} countdowns, ${homework.length} homework, ${exams.length} exams)`);
+  console.log(`Calendar: ok (${events.length} events, ${countdowns.length} countdowns, ${homework.length} homework, ${exams.length} exams, ${school.length} school dates)`);
 }
 
 // ------------------------------------------------------------ dashboard settings + timetable

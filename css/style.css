@@ -263,6 +263,16 @@ h2 {
 .evDay { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-top: 6px; }
 .evT { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evW { font-size: 13px; color: var(--muted); }
+.evDay.ex { color: var(--bad); }
+.evDay.hw { color: var(--warn); }
+.exR { display: flex; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.exI { flex: 1; min-width: 0; }
+.exB { width: 50px; margin-right: 12px; padding: 3px 0; border-radius: 8px; text-align: center; background: var(--glass); color: var(--muted); }
+.exB b { display: block; font-size: 22px; line-height: 1.1; }
+.exB b.now { font-size: 15px; line-height: 2; }
+.exB i { display: block; font-style: normal; font-size: 11px; }
+.exB.warn { background: rgba(255, 210, 122, 0.22); color: var(--warn); }
+.exB.bad { background: rgba(255, 120, 120, 0.28); color: var(--bad); }
 
 /* ---------- night ---------- */
 #night {

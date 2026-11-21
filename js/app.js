@@ -791,13 +791,49 @@
     return html;
   }
 
+  // Exams + homework due + school dates. Returns { html, soon } or null when there is nothing.
+  function pageSchool(now) {
+    var todayKey = dayKey(now), html = '', budget = 10;
+    var exams = examList().filter(function (x) { var n = daysBetween(todayKey, x.date); return n >= 0 && n <= 42; }).slice(0, 4);
+    var hw = homeworkList().filter(function (h) { var n = daysBetween(todayKey, h.due); return n >= 0 && n <= 7; }).slice(0, 2);
+    var dates = ((S.calendar.data && S.calendar.data.school) || []).filter(function (d) {
+      return (d.time ? d.day >= todayKey : d.endDay > todayKey) && daysBetween(todayKey, d.day) <= 28;
+    });
+    if (!exams.length && !hw.length && !dates.length) return null;
+    if (exams.length) {
+      html += '<div class="evDay ex">Exams</div>';
+      exams.forEach(function (x) {
+        var n = daysBetween(todayKey, x.date), d = keyToDate(x.date);
+        var cls = n <= 2 ? ' bad' : n <= 7 ? ' warn' : '';
+        var badge = n === 0 ? '<b class="now">Today</b>' : '<b>' + n + '</b><i>' + (n === 1 ? 'day' : 'days') + '</i>';
+        html += '<div class="exR"><div class="exB' + cls + '">' + badge + '</div><div class="exI"><div class="evT">' + esc(exText(x)) +
+          '</div><div class="evW">' + DAYS_S[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3) +
+          (x.start ? ' · ' + x.start : '') + '</div></div></div>';
+        budget -= 1.5;
+      });
+    }
+    if (hw.length && budget >= 2) {
+      html += '<div class="evDay hw">Due</div>';
+      hw.forEach(function (h) { html += '<div class="dueL"><span class="dueD">' + shortDay(h.due, todayKey) + '</span>' + esc(hwText(h)) + '</div>'; budget--; });
+    }
+    if (dates.length && budget >= 2) {
+      html += '<div class="evDay">School dates</div>';
+      dates.slice(0, Math.min(3, Math.floor(budget - 1))).forEach(function (d) {
+        var dk = d.day < todayKey ? todayKey : d.day;
+        html += '<div class="dueL"><span class="dueD">' + shortDay(dk, todayKey) + '</span>' + esc(d.title) + (d.time ? ' · ' + d.time : '') + '</div>';
+      });
+    }
+    return { html: html, soon: exams.length > 0 && daysBetween(todayKey, exams[0].date) <= 7 };
+  }
+
   function renderUpcoming(now) {
     var el = $('upcoming'), html = '<h2>Coming up</h2>';
     var cal = S.calendar.data;
-    var extras = pageExtras(now, 6);
+    var extras = pageExtras(now, 6), school = pageSchool(now);
     var pages = [];
     if (cal && cal.events) pages.push(pageEvents(now));
     if (extras) pages.push(extras);
+    if (school) { if (school.soon) pages.unshift(school.html); else pages.push(school.html); } // exam within a week: show it first
     if (!pages.length) pages.push('<div class="empty">Nothing coming up.</div>');
     if (upPage >= pages.length) upPage = 0;
     html += pages[upPage];

@@ -33,6 +33,7 @@ The iPad picks up the change within about 10 minutes.
 | `PRIVATE_CONFIG` | Contents of `private/config.json` |
 | `UNTIS_SERVER`, `UNTIS_SCHOOL`, `UNTIS_USER`, `UNTIS_SECRET` | WebUntis login (key from "Untis Mobile" access) |
 | `GCAL_ICS_URLS` | Secret iCal address(es), separated by spaces. Prefix one with `homework:` to read it as a homework/exam calendar |
+| `SCHOOL_ICS_URL` | School dates iCal address (ATIW Termine). Exams and other school dates go to their own "Coming up" tab. Set with `private/set-calendars.ps1` |
 
 Calendar extras: add `#countdown` to an event title to show it as a countdown.
 Settings `calendarHide` (hide routine events by title), `birthdays` (`[{ "name", "date": "MM-DD", "year" }]`),

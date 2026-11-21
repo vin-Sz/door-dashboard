@@ -73,7 +73,7 @@ jobs:
           UNTIS_SCHOOL: ${{ secrets.UNTIS_SCHOOL }}
           UNTIS_USER: ${{ secrets.UNTIS_USER }}
           UNTIS_PASSWORD: ${{ secrets.UNTIS_PASSWORD }}
-          GCAL_ICS_URLS: ${{ secrets.GCAL_ICS_URLS }}
+          GCAL_ICS_URLS: ${{ secrets.GCAL_ICS_URLS }} school:${{ secrets.SCHOOL_ICS_URL }}
           PRIVATE_CONFIG: ${{ secrets.PRIVATE_CONFIG }}
         run: |
           npm install --no-audit --no-fund --loglevel=error
