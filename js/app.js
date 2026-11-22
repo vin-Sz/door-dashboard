@@ -252,7 +252,7 @@
       var delay = (typeof d.delayDeparture === 'number') ? d.delayDeparture : null;
       out.push({
         plan: plan, when: plan + (delay || 0) * MIN, delay: delay,
-        line: d.train || '', dest: d.destination || '', platform: d.platform || '',
+        line: (d.train || '').replace(/^[A-Z]+\s+(?=(RB|RE|S|IC|ICE|EC|RS)\s?\d)/, ''), dest: d.destination || '', platform: d.platform || '',
         cancelled: !!d.isCancelled, bus: false, replacement: false
       });
     });
