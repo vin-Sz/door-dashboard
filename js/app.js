@@ -77,7 +77,7 @@
   // ------------------------------------------------------------ state
   // Each source: { data, ts (ms of last success), err }
   var S = {};
-  ['weather', 'transit', 'route', 'holidays', 'untis', 'calendar'].forEach(function (k) {
+  ['weather', 'transit', 'route', 'holidays', 'untis', 'calendar', 'wuwa'].forEach(function (k) {
     var cached = store.get(k);
     S[k] = { data: cached ? cached.data : null, ts: cached ? cached.ts : 0, err: null };
   });
@@ -826,13 +826,88 @@
     return { html: html, soon: exams.length > 0 && daysBetween(todayKey, exams[0].date) <= 7 };
   }
 
+  // ------------------------------------------------------------ Wuthering Waves banners
+  // Schedule lives in schedule/wuwa-banners.json (public, edit it when new phases are announced).
+  function loadWuwa() {
+    return fetchJSON('schedule/wuwa-banners.json?t=' + Date.now()).then(function (j) {
+      if (!j || !j.phases) throw new Error('no phases');
+      ok('wuwa', j);
+    }, function (e) { fail('wuwa', e); });
+  }
+
+  // "2026-12-03T10:00" is server time, "2026-11-12T11:00+08:00" is a global moment.
+  function wwTime(s, off) {
+    var iso = /([zZ]|[+-]\d\d:?\d\d)$/.test(s) ? s : s + off;
+    iso = iso.replace(/T(\d\d:\d\d)([zZ+-])/, 'T$1:00$2'); // Safari 12 wants seconds
+    return Date.parse(iso);
+  }
+
+  // { cur, next: [...] } or null. Guesses the next phase when the file has run out.
+  function wwPhases(now) {
+    var j = S.wuwa.data;
+    if (!j || !j.phases || !j.phases.length) return null;
+    var off = (C && C.wuwaServer) || j.serverOffset || '+08:00', t = now.getTime();
+    var list = j.phases.map(function (p) {
+      return { version: p.version, phase: p.phase, featured: p.featured || [], tentative: !!p.tentative, t: wwTime(p.start, off) };
+    }).filter(function (p) { return !isNaN(p.t); }).sort(function (a, b) { return a.t - b.t; });
+    if (!list.length) return null;
+    var cur = null, next = [];
+    list.forEach(function (p) { if (p.t <= t) cur = p; else next.push(p); });
+    if (!next.length) {
+      var step = (j.phaseDays || 21) * 86400000, g = list[list.length - 1].t;
+      while (g <= t) g += step;
+      next.push({ version: '', phase: 0, featured: [], tentative: true, guess: true, t: g });
+    }
+    return { cur: cur, next: next };
+  }
+
+  function wwLeft(ms) {
+    var m = Math.max(1, Math.ceil(ms / MIN)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+    return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + (m % 60) + 'm' : m + 'm';
+  }
+  function wwWhen(t) {
+    var d = new Date(t);
+    return DAYS_S[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3) + ' ' + hm(d);
+  }
+  function wwNames(p) {
+    if (p.guess) return 'Next banners (estimated)';
+    return p.featured.length ? esc(p.featured.join(', ')) + (p.tentative ? '?' : '') : 'New banners';
+  }
+  function wwLabel(p) { return p.version ? 'v' + esc(p.version) + (p.phase ? ' Phase ' + p.phase : '') : ''; }
+
+  // Returns { html, soon } or null.
+  function pageWuwa(now) {
+    var w = wwPhases(now);
+    if (!w) return null;
+    var n = w.next[0], ms = n.t - now.getTime(), days = Math.floor(ms / 86400000);
+    var badge = days >= 2 ? '<b>' + days + '</b><i>days</i>'
+      : ms >= 3600000 ? '<b>' + Math.floor(ms / 3600000) + '</b><i>hours</i>'
+      : '<b>' + Math.max(1, Math.ceil(ms / MIN)) + '</b><i>min</i>';
+    var lbl = wwLabel(n);
+    var html = '<div class="evDay ww">Wuthering Waves</div>' +
+      '<div class="exR"><div class="exB ww' + (ms < 86400000 ? ' warn' : '') + '">' + badge + '</div><div class="exI">' +
+      '<div class="evT">' + wwNames(n) + '</div><div class="evW">' + (lbl ? lbl + ' · ' : '') + wwWhen(n.t) +
+      '</div><div class="wwIn">starts in ' + wwLeft(ms) + '</div></div></div>';
+    if (w.next[1]) {
+      var n2 = w.next[1];
+      html += '<div class="ev"><div class="evT">Then: ' + wwNames(n2) + '</div><div class="evW">' +
+        (wwLabel(n2) ? wwLabel(n2) + ' · ' : '') + wwWhen(n2.t) + '</div></div>';
+    }
+    if (w.cur) {
+      html += '<div class="ev"><div class="evT">Now: ' + wwNames(w.cur) + '</div><div class="evW">' +
+        (wwLabel(w.cur) ? wwLabel(w.cur) + ' · ' : '') + 'until ' + wwWhen(n.t) + '</div></div>';
+    }
+    return { html: html, soon: ms < 86400000 };
+  }
+
   function renderUpcoming(now) {
     var el = $('upcoming'), html = '<h2>Coming up</h2>';
     var cal = S.calendar.data;
-    var extras = pageExtras(now, 6), school = pageSchool(now);
+    var extras = pageExtras(now, 6), school = pageSchool(now), wuwa = pageWuwa(now);
     var pages = [];
     if (cal && cal.events) pages.push(pageEvents(now));
     if (extras) pages.push(extras);
+    if (wuwa) { if (wuwa.soon) pages.unshift(wuwa.html); else pages.push(wuwa.html); } // banners within a day: show first
     if (school) { if (school.soon) pages.unshift(school.html); else pages.push(school.html); } // exam within a week: show it first
     if (!pages.length) pages.push('<div class="empty">Nothing coming up.</div>');
     if (upPage >= pages.length) upPage = 0;
@@ -1046,6 +1121,7 @@
       { fn: loadTransit, every: C.refresh.transit, night: 0 },
       { fn: loadRoutes, every: C.refresh.transit, night: C.refresh.transit },
       { fn: loadHolidays, every: C.refresh.holidays, night: C.refresh.holidays },
+      { fn: loadWuwa, every: 180, night: 180 },
       { fn: loadPrivate, every: C.refresh.privateData, night: 60 },
       { fn: checkVersion, every: C.refresh.version, night: C.refresh.version }
     ];

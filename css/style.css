@@ -273,6 +273,10 @@ h2 {
 .exB i { display: block; font-style: normal; font-size: 11px; }
 .exB.warn { background: rgba(255, 210, 122, 0.22); color: var(--warn); }
 .exB.bad { background: rgba(255, 120, 120, 0.28); color: var(--bad); }
+.evDay.ww { color: var(--sport); }
+.exB.ww { background: rgba(226, 200, 255, 0.2); color: var(--sport); }
+.wwIn { font-size: 14px; color: var(--sport); margin-top: 1px; }
+.exB.ww.warn { background: rgba(255, 210, 122, 0.22); color: var(--warn); }
 
 /* ---------- night ---------- */
 #night {
