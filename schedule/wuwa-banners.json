@@ -1,0 +1,18 @@
+{
+  "_help": [
+    "Wuthering Waves banner schedule for the 'Coming up' card. Add each new phase when Kuro announces it.",
+    "start: a time with an offset (+08:00) is one global moment, e.g. a version update after maintenance.",
+    "A time without an offset is server time (Phase 2 banners open at 10:00 on each server's own clock).",
+    "serverOffset: Europe +01:00, America -05:00, Asia/SEA/HMT +08:00.",
+    "tentative: true marks leaked or predicted dates and characters (shown with a '?').",
+    "When every listed phase has started, the card guesses the next one phaseDays after the last start."
+  ],
+  "serverOffset": "+01:00",
+  "phaseDays": 21,
+  "phases": [
+    { "version": "3.8", "phase": 1, "start": "2026-11-12T11:00+08:00", "featured": ["Lily", "Sigrika", "Qiuyuan"] },
+    { "version": "3.8", "phase": 2, "start": "2026-12-03T10:00", "featured": ["Xuanling", "Suisui", "Hiyuki"] },
+    { "version": "4.0", "phase": 1, "start": "2026-12-22T11:00+08:00", "featured": ["Anna"], "tentative": true },
+    { "version": "4.0", "phase": 2, "start": "2027-01-12T10:00", "featured": ["Lucielle"], "tentative": true }
+  ]
+}

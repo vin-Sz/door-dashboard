@@ -16,6 +16,7 @@ clock and a lock symbol only.
 - Train/bus departures (Transitous, DBF fallback) with delays and "leave in X min"
 - School day from WebUntis (fallback: regular timetable), calm screen on weekends and holidays
 - Calendar events (iCal) and the next holidays
+- Wuthering Waves banner countdown (next phase, what follows, what is live now)
 - Dim night mode (tap to wake for 2 minutes, preview with `#night=1`)
 
 ## Settings
@@ -38,6 +39,16 @@ The iPad picks up the change within about 10 minutes.
 Calendar extras: add `#countdown` to an event title to show it as a countdown.
 Settings `calendarHide` (hide routine events by title), `birthdays` (`[{ "name", "date": "MM-DD", "year" }]`),
 `countdowns` and `schoolRoutes` live in `private/config.json`.
+
+## Wuthering Waves banners
+The schedule is in `schedule/wuwa-banners.json` (public, no personal data). When Kuro
+announces a new version or phase, add a line to `phases` and push. A start with an
+offset (`2026-12-22T11:00+08:00`) is one global moment, like a version update after
+maintenance; a start without one (`2026-12-03T10:00`) is server time, used for Phase 2
+banners. `serverOffset` picks the server (Europe `+01:00`, America `-05:00`, Asia `+08:00`);
+`wuwaServer` in `private/config.json` overrides it. Mark leaks and guesses with
+`"tentative": true`. If the list runs out, the card estimates the next phase
+`phaseDays` (21) after the last one and says so.
 
 ## Updates
 Push to `main`. The Action deploys and writes `version.json`; the device reloads
